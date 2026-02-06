@@ -64,6 +64,9 @@ app.get('/auth/google',
 app.get('/auth/google/callback',
     passport.authenticate('google', { failureRedirect: '/auth/failure' }),
     (req, res) => {
+        if (!req.user) {
+            return res.status(401).json({ message: 'Authentication failed' });
+        }
         res.redirect(`${process.env.CLIENT_URL}/`);
     }
 );
