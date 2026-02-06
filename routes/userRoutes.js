@@ -27,4 +27,39 @@ router.get('/debug', (req, res) => {
     });
 });
 
+// Set a test value on the session so you can verify the session is persisted
+router.get('/set_test_session', (req, res) => {
+    req.session.test = 'ok';
+    res.json({
+        ok: true,
+        message: 'Test session value set',
+        sessionID: req.sessionID,
+        session: req.session,
+        cookiesHeader: req.headers.cookie
+    });
+});
+
+// Return session and cookie details for debugging cross-site cookie behaviour
+router.get('/session_info', (req, res) => {
+    res.json({
+        authenticated: !!req.user,
+        user: req.user,
+        sessionID: req.sessionID,
+        hasSession: !!req.session,
+        sessionCookie: req.session ? req.session.cookie : null,
+        cookiesHeader: req.headers.cookie
+    });
+});
+
+// Set a client-visible test cookie with the same cookie options used by the session
+router.get('/set_test_cookie', (req, res) => {
+    const cookieOptions = {
+        httpOnly: false,
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        secure: process.env.NODE_ENV === 'production'
+    };
+    res.cookie('test_cookie', '1', cookieOptions);
+    res.json({ ok: true, message: 'Test cookie set', cookieOptions });
+});
+
 module.exports = router;
