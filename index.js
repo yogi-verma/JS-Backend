@@ -7,6 +7,7 @@ require('dotenv').config();
 require('./auth');
 
 const userRoutes = require('./routes/userRoutes');
+const User = require('./models/User'); // Adjust path to your User model
 
 const app = express();
 
@@ -23,13 +24,16 @@ app.use(cors({
     credentials: true
 }));
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.use(session({
     secret: process.env.SESSION_SECRET || 'mysecret',
     resave: false,
     saveUninitialized: false,
     cookie: { 
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'none',
+        sameSite: 'lax',
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 
     }
@@ -37,6 +41,20 @@ app.use(session({
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Passport Serialization (CRITICAL FIX)
+passport.serializeUser((user, done) => {
+    done(null, user.id);
+});
+
+passport.deserializeUser(async (id, done) => {
+    try {
+        const user = await User.findById(id);
+        done(null, user);
+    } catch (err) {
+        done(err);
+    }
+});
 
 // Auth Routes
 app.get('/auth/google',
@@ -46,7 +64,7 @@ app.get('/auth/google',
 app.get('/auth/google/callback',
     passport.authenticate('google', { failureRedirect: '/auth/failure' }),
     (req, res) => {
-        res.redirect(`${process.env.CLIENT_URL}/dashboard`);
+        res.redirect(`${process.env.CLIENT_URL}/`);
     }
 );
 
@@ -55,7 +73,10 @@ app.get('/auth/failure', (req, res) => {
 });
 
 app.get('/auth/logout', (req, res) => {
-    req.logout(() => {
+    req.logout((err) => {
+        if (err) {
+            return res.status(500).send('Logout failed');
+        }
         res.redirect(process.env.CLIENT_URL);
     });
 });
