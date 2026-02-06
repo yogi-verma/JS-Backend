@@ -24,10 +24,15 @@ app.use(cors({
 }));
 
 app.use(session({
-    secret: 'mysecret',
+    secret: process.env.SESSION_SECRET || 'mysecret',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 }
+    cookie: { 
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'none',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 
+    }
 }));
 
 app.use(passport.initialize());
