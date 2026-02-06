@@ -23,8 +23,17 @@ mongoose.connect(process.env.MONGO_URI, {
   .catch(err => console.log(err));
 
 // Middleware
+// Allow frontend origin
+const allowedOrigins = [process.env.CLIENT_URL].filter(Boolean);
 app.use(cors({
-    origin: process.env.CLIENT_URL,
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like curl, Postman) or from allowedOrigins
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            return callback(null, true);
+        }
+        return callback(new Error('CORS origin not allowed'));
+    },
     credentials: true
 }));
 
