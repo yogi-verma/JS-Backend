@@ -42,17 +42,20 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Passport Serialization (CRITICAL FIX)
+// Passport Serialization
 passport.serializeUser((user, done) => {
-    done(null, user.id);
+    console.log('Serializing user:', user._id);
+    done(null, user._id);
 });
 
 passport.deserializeUser(async (id, done) => {
     try {
+        console.log('Deserializing user:', id);
         const user = await User.findById(id);
         done(null, user);
     } catch (err) {
-        done(err);
+        console.error('Deserialization error:', err);
+        done(null, null);
     }
 });
 
@@ -86,5 +89,11 @@ app.get('/auth/logout', (req, res) => {
 
 // User Routes
 app.use('/api', userRoutes);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Server Error:', err);
+    res.status(500).json({ message: 'Internal Server Error', error: err.message });
+});
 
 app.listen(5000, () => console.log('Server running on http://localhost:5000'));

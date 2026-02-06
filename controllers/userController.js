@@ -2,17 +2,23 @@ const User = require('../models/User');
 
 const findOrCreateUser = async (profile) => {
     try {
+        console.log('Finding or creating user with googleId:', profile.id);
+        
         const existingUser = await User.findOne({ googleId: profile.id });
-        if (existingUser) return existingUser;
+        if (existingUser) {
+            console.log('User found:', existingUser._id);
+            return existingUser;
+        }
 
         const newUser = new User({
             googleId: profile.id,
-            displayName: profile.displayName,
-            email: profile.emails && profile.emails[0] ? profile.emails[0].value : '',
+            displayName: profile.displayName || 'User',
+            email: profile.emails && profile.emails[0] ? profile.emails[0].value : `${profile.id}@google.com`,
             photo: profile.photos && profile.photos[0] ? profile.photos[0].value : ''
         });
 
         await newUser.save();
+        console.log('New user created:', newUser._id);
         return newUser;
     } catch (error) {
         console.error('Error in findOrCreateUser:', error);
