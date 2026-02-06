@@ -11,6 +11,10 @@ const User = require('./models/User'); // Adjust path to your User model
 
 const app = express();
 
+// If running behind a proxy (e.g. Vercel), trust first proxy so secure cookies work
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -33,7 +37,9 @@ app.use(session({
     saveUninitialized: false,
     cookie: { 
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        // Use 'none' in production so the cookie is sent in cross-site requests
+        // (frontend and backend are on different origins). In non-production keep 'lax'.
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 
     }
@@ -70,7 +76,8 @@ app.get('/auth/google/callback',
         if (!req.user) {
             return res.status(401).json({ message: 'Authentication failed' });
         }
-        res.redirect(`${process.env.CLIENT_URL}/`);
+        // After successful login, redirect to frontend dashboard
+        res.redirect(`${process.env.CLIENT_URL}/dashboard`);
     }
 );
 
