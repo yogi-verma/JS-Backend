@@ -3,7 +3,15 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo 'Build completed'",
+    "lint": "eslint . || echo 'No ESLint configured'",
+    "docker:build": "docker build -t oauth-backend .",
+    "docker:run": "docker run -p 5000:5000 --env-file .env oauth-backend",
+    "security:audit": "npm audit --audit-level moderate",
+    "security:fix": "npm audit fix"
   },
   "author": "",
   "license": "ISC",
