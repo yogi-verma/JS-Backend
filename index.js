@@ -1,80 +1,40 @@
+require('dotenv').config();
+
 const express = require('express');
 const passport = require('passport');
-const session = require('express-session');
-const cors = require('cors');
-const mongoose = require('mongoose');
-require('dotenv').config();
-require('./auth');
+
+const { validateEnv } = require('./config/env');
+const connectDB = require('./config/database');
+const corsMiddleware = require('./middleware/cors');
+const sessionMiddleware = require('./middleware/session');
+const errorHandler = require('./middleware/errorHandler');
+const logger = require('./utils/logger');
+const AuthService = require('./services/authService');
+require('./config/passport');
 
 const userRoutes = require('./routes/userRoutes');
-const User = require('./models/User'); // Adjust path to your User model
 
 const app = express();
 
-// If running behind a proxy (e.g. Vercel), trust first proxy so secure cookies work
+validateEnv();
+connectDB();
+
 if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1);
 }
-// MongoDB Connection
-mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => console.log('MongoDB connected'))
-  .catch(err => console.log(err));
 
-// Middleware
-// Allow frontend origin
-const allowedOrigins = [process.env.CLIENT_URL].filter(Boolean);
-app.use(cors({
-    origin: (origin, callback) => {
-        // Allow requests with no origin (like curl, Postman) or from allowedOrigins
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1) {
-            return callback(null, true);
-        }
-        return callback(new Error('CORS origin not allowed'));
-    },
-    credentials: true
-}));
-
+app.use(corsMiddleware());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-app.use(session({
-    secret: process.env.SESSION_SECRET || 'mysecret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { 
-        secure: process.env.NODE_ENV === 'production',
-        // Use 'none' in production so the cookie is sent in cross-site requests
-        // (frontend and backend are on different origins). In non-production keep 'lax'.
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 
-    }
-}));
-
+app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Passport Serialization
-passport.serializeUser((user, done) => {
-    console.log('Serializing user:', user._id);
-    done(null, user._id);
+app.get('/', (req, res) => {
+    logger.info('Welcome endpoint accessed');
+    res.json({ message: 'Welcome to Frontend Mastery' });
 });
 
-passport.deserializeUser(async (id, done) => {
-    try {
-        console.log('Deserializing user:', id);
-        const user = await User.findById(id);
-        done(null, user);
-    } catch (err) {
-        console.error('Deserialization error:', err);
-        done(null, null);
-    }
-});
-
-// Auth Routes
 app.get('/auth/google',
     passport.authenticate('google', { scope: ['profile', 'email'] })
 );
@@ -85,31 +45,24 @@ app.get('/auth/google/callback',
         if (!req.user) {
             return res.status(401).json({ message: 'Authentication failed' });
         }
-        // After successful login, redirect to frontend dashboard
         res.redirect(`${process.env.CLIENT_URL}/dashboard`);
     }
 );
 
 app.get('/auth/failure', (req, res) => {
-    res.send('Failed to authenticate..');
+    res.status(401).json({ message: 'Failed to authenticate' });
 });
 
 app.get('/auth/logout', (req, res) => {
+    const userId = req.user?._id;
     req.logout((err) => {
         if (err) {
-            return res.status(500).send('Logout failed');
+            return res.status(500).json({ message: 'Logout failed' });
         }
+        AuthService.logLogout(userId);
         res.redirect(process.env.CLIENT_URL);
     });
 });
 
-// User Routes
-app.use('/api', userRoutes);
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error('Server Error:', err);
-    res.status(500).json({ message: 'Internal Server Error', error: err.message });
-});
-
-app.listen(5000, () => console.log('Server running on http://localhost:5000'));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => logger.info(`Server running on http://localhost:${PORT}`));
