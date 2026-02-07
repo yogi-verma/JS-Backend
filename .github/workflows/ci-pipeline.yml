@@ -22,17 +22,14 @@ jobs:
         
     - name: Install dependencies
       run: |
-        cd backend
         npm ci
         
     - name: Run linting
       run: |
-        cd backend
         npm run lint
         
     - name: Build application
       run: |
-        cd backend
         npm run build
         
     - name: Create Git tag
