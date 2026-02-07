@@ -54,7 +54,6 @@ jobs:
     - name: Build Docker image
       if: github.ref == 'refs/heads/main'
       run: |
-        cd backend
         docker build -t oauth-backend:${{ github.sha }} .
         docker tag oauth-backend:${{ github.sha }} oauth-backend:latest
         
@@ -64,7 +63,10 @@ jobs:
       with:
         name: build-artifacts
         path: |
-          backend/
+          .
+          !.git/
+          !node_modules/
+          !coverage/
         retention-days: 30
         
     - name: Notify success
