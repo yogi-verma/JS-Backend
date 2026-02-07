@@ -54,8 +54,8 @@ jobs:
       run: |
         docker build -t oauth-backend:${{ github.sha }} .
         docker tag oauth-backend:${{ github.sha }} oauth-backend:latest
-        docker tag oauth-backend:${{ github.sha }} yogiverma/oauth-backend:${{ github.sha }}
-        docker tag oauth-backend:latest yogiverma/oauth-backend:latest
+        docker tag oauth-backend:${{ github.sha }} yogeshverma123/frontendmastery:${{ github.sha }}
+        docker tag oauth-backend:latest yogeshverma123/frontendmastery:latest
         
     - name: Log in to Docker Hub
       if: github.ref == 'refs/heads/main'
@@ -67,8 +67,8 @@ jobs:
     - name: Push to Docker Hub
       if: github.ref == 'refs/heads/main'
       run: |
-        docker push yogiverma/oauth-backend:${{ github.sha }}
-        docker push yogiverma/oauth-backend:latest
+        docker push yogeshverma123/frontendmastery:${{ github.sha }}
+        docker push yogeshverma123/frontendmastery:latest
         
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
