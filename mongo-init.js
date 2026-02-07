@@ -1,5 +1,6 @@
 // MongoDB initialization script
-db = db.getSiblingDB('oauth');
+/* eslint-disable no-undef */
+var db = db.getSiblingDB('oauth');
 
 // Create user collection with indexes
 db.createCollection('users');

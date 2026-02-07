@@ -3,6 +3,8 @@ const passport = require('passport');
 const session = require('express-session');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const logger = require('./logger');
+
 require('dotenv').config();
 
 const userRoutes = require('./routes/userRoutes');
@@ -14,14 +16,14 @@ const app = express();
 const requiredEnvVars = ['MONGO_URI', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'SESSION_SECRET'];
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingVars.length > 0) {
-    console.error('Missing required environment variables:', missingVars);
+    logger.error('Missing required environment variables:', missingVars);
     process.exit(1);
 }
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('MongoDB connected'))
-    .catch(err => console.log(err));
+    .then(() => logger.info('MongoDB connected'))
+    .catch(err => logger.error(err));
 
 // If running behind a proxy (e.g. Vercel), trust first proxy so secure cookies work
 if (process.env.NODE_ENV === 'production') {
@@ -66,28 +68,28 @@ passport.use(new GoogleStrategy({
     callbackURL: `${process.env.OAUTH_CALLBACK_URL || 'http://localhost:5000'}/auth/google/callback`
 }, async (accessToken, refreshToken, profile, done) => {
     try {
-        console.log('Authentication attempt via Google');
+        logger.info('Authentication attempt via Google');
         const user = await findOrCreateUser(profile);
-        console.log('Authentication successful');
+        logger.info('Authentication successful');
         done(null, user);
     } catch (err) {
-        console.error('Google OAuth Error:', err);
+        logger.error('Google OAuth Error:', err);
         done(err, null);
     }
 }));
 
 passport.serializeUser((user, done) => {
-    console.log('Serializing user:', user._id);
+    logger.info('Serializing user:', user._id);
     done(null, user._id);
 });
 
 passport.deserializeUser(async (id, done) => {
     try {
-        console.log('Deserializing user:', id);
+        logger.debug('Deserializing user:', id);
         const user = await User.findById(id);
         done(null, user);
     } catch (err) {
-        console.error('Deserialization error:', err);
+        logger.error('Deserialization error:', err);
         done(null, null);
     }
 });
@@ -119,14 +121,14 @@ app.get('/auth/logout', (req, res) => {
         if (err) {
             return res.status(500).json({ message: 'Logout failed' });
         }
-        console.log('User logged out');
+        logger.info('User logged out');
         res.redirect(process.env.CLIENT_URL);
     });
 });
 
 // Welcome endpoint
 app.get('/', (req, res) => {
-    console.log('Welcome endpoint accessed');
+    logger.info('Welcome endpoint accessed');
     res.json({ message: 'Welcome to Frontend Mastery' });
 });
 
@@ -135,8 +137,8 @@ app.use('/api', userRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error('Server Error:', err);
+    logger.error('Server Error:', err);
     res.status(500).json({ message: 'Internal Server Error', error: err.message });
 });
 
-app.listen(5000, () => console.log('Server running on http://localhost:5000'));
+app.listen(5000, () => logger.info('Server running on http://localhost:5000'));

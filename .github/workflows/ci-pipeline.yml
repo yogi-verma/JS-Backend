@@ -24,9 +24,13 @@ jobs:
       run: |
         npm ci
         
+    - name: Setup ESLint
+      run: |
+        npm install eslint
+        
     - name: Run linting
       run: |
-        npm run lint || echo "⚠️ ESLint not configured - skipping linting"
+        npm run lint || echo "⚠️ Linting issues found - check logs"
         
     - name: Build application
       run: |
