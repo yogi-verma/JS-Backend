@@ -8,6 +8,8 @@ const logger = require('./logger');
 require('dotenv').config();
 
 const userRoutes = require('./routes/userRoutes');
+const moduleRoutes = require('./routes/moduleRoutes');
+const lessonRoutes = require('./routes/lessonRoutes');
 const User = require('./models/User');
 
 const app = express();
@@ -134,6 +136,12 @@ app.get('/', (req, res) => {
 
 // User Routes
 app.use('/api', userRoutes);
+
+// Module Routes
+app.use('/api/modules', moduleRoutes);
+
+// Lesson Routes
+app.use('/api/lessons', lessonRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
