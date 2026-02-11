@@ -44,10 +44,6 @@ const lessonSchema = new mongoose.Schema({
         enum: ['theory', 'practice', 'quiz', 'project'],
         default: 'theory'
     },
-    objectives: [{
-        type: String,
-        trim: true
-    }],
     prerequisites: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Lesson'
@@ -55,6 +51,20 @@ const lessonSchema = new mongoose.Schema({
     tags: [{
         type: String,
         trim: true
+    }],
+    images: [{
+        url: {
+            type: String,
+            required: true
+        },
+        caption: {
+            type: String,
+            trim: true
+        },
+        alt: {
+            type: String,
+            trim: true
+        }
     }],
     resources: [{
         title: String,
@@ -66,19 +76,25 @@ const lessonSchema = new mongoose.Schema({
         url: String,
         description: String
     }],
-    exercises: [{
-        question: String,
-        type: {
+    interviewQuestions: [{
+        question: {
             type: String,
-            enum: ['multiple-choice', 'code', 'text', 'true-false'],
-            default: 'text'
+            required: true,
+            trim: true
         },
-        options: [String], // for multiple choice
-        correctAnswer: String,
-        explanation: String,
-        points: {
-            type: Number,
-            default: 10
+        answer: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        difficulty: {
+            type: String,
+            enum: ['beginner', 'intermediate', 'advanced'],
+            default: 'beginner'
+        },
+        category: {
+            type: String,
+            trim: true
         }
     }]
 }, { 
