@@ -43,7 +43,8 @@ app.use(cors({
         }
         return callback(new Error('CORS origin not allowed'));
     },
-    credentials: true
+    credentials: true,
+    exposedHeaders: ['X-Cache', 'X-Response-Time'] // Expose custom headers to frontend
 }));
 
 app.use(express.json());

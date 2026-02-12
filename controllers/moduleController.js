@@ -1,21 +1,41 @@
 const Module = require('../models/Module');
 const logger = require('../logger');
+const { generateKey, cacheWrapper, invalidateByPattern } = require('../cache');
 
 // Get all modules
 const getAllModules = async (req, res) => {
+    const startTime = process.hrtime.bigint();
     try {
         const { published = 'true', page = 1, limit = 10 } = req.query;
         
         const filter = published === 'true' ? { isPublished: true } : {};
         
-        const modules = await Module.find(filter)
-            .sort({ order: 1 })
-            .limit(limit * 1)
-            .skip((page - 1) * limit)
-            .populate('prerequisites', 'name title')
-            .exec();
+        // Generate cache key
+        const cacheKey = generateKey('modules', 'all', published, page, limit);
+        
+        // Try to get from cache
+        const { data: cachedResult, fromCache } = await cacheWrapper(
+            cacheKey,
+            300, // 5 minutes TTL
+            async () => {
+                const modules = await Module.find(filter)
+                    .sort({ order: 1 })
+                    .limit(limit * 1)
+                    .skip((page - 1) * limit)
+                    .populate('prerequisites', 'name title')
+                    .exec();
 
-        const total = await Module.countDocuments(filter);
+                const total = await Module.countDocuments(filter);
+                
+                return { modules, total };
+            }
+        );
+        
+        const { modules, total } = cachedResult;
+
+        const durationMs = Number(process.hrtime.bigint() - startTime) / 1e6;
+        res.set('X-Response-Time', `${durationMs.toFixed(2)}ms`);
+        res.set('X-Cache', fromCache ? 'HIT' : 'MISS');
 
         res.json({
             success: true,
@@ -25,14 +45,19 @@ const getAllModules = async (req, res) => {
                 limit: parseInt(limit),
                 total,
                 pages: Math.ceil(total / limit)
-            }
+            },
+            responseTimeMs: Number(durationMs.toFixed(2)),
+            cached: fromCache
         });
     } catch (error) {
         logger.error('Error fetching modules:', error);
+        const durationMs = Number(process.hrtime.bigint() - startTime) / 1e6;
+        res.set('X-Response-Time', `${durationMs.toFixed(2)}ms`);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch modules',
-            error: error.message
+            error: error.message,
+            responseTimeMs: Number(durationMs.toFixed(2))
         });
     }
 };
@@ -42,9 +67,19 @@ const getModuleById = async (req, res) => {
     try {
         const { id } = req.params;
         
-        const module = await Module.findById(id)
-            .populate('prerequisites', 'name title description')
-            .exec();
+        // Generate cache key
+        const cacheKey = generateKey('modules', 'id', id);
+        
+        // Try to get from cache
+        const { data: module, fromCache } = await cacheWrapper(
+            cacheKey,
+            600, // 10 minutes TTL
+            async () => {
+                return await Module.findById(id)
+                    .populate('prerequisites', 'name title description')
+                    .exec();
+            }
+        );
 
         if (!module) {
             return res.status(404).json({
@@ -53,9 +88,11 @@ const getModuleById = async (req, res) => {
             });
         }
 
+        res.set('X-Cache', fromCache ? 'HIT' : 'MISS');
         res.json({
             success: true,
-            data: module
+            data: module,
+            cached: fromCache
         });
     } catch (error) {
         logger.error('Error fetching module:', error);
@@ -72,9 +109,19 @@ const getModuleByName = async (req, res) => {
     try {
         const { name } = req.params;
         
-        const module = await Module.findOne({ name })
-            .populate('prerequisites', 'name title description')
-            .exec();
+        // Generate cache key
+        const cacheKey = generateKey('modules', 'name', name);
+        
+        // Try to get from cache
+        const { data: module, fromCache } = await cacheWrapper(
+            cacheKey,
+            600, // 10 minutes TTL
+            async () => {
+                return await Module.findOne({ name })
+                    .populate('prerequisites', 'name title description')
+                    .exec();
+            }
+        );
 
         if (!module) {
             return res.status(404).json({
@@ -83,9 +130,11 @@ const getModuleByName = async (req, res) => {
             });
         }
 
+        res.set('X-Cache', fromCache ? 'HIT' : 'MISS');
         res.json({
             success: true,
-            data: module
+            data: module,
+            cached: fromCache
         });
     } catch (error) {
         logger.error('Error fetching module by name:', error);
@@ -122,6 +171,9 @@ const createModule = async (req, res) => {
 
         const module = new Module(moduleData);
         await module.save();
+
+        // Invalidate all module caches
+        invalidateByPattern('modules');
 
         logger.info(`New module created: ${module.name} by user ${req.user?.displayName || 'Anonymous'}`);
 
@@ -194,6 +246,9 @@ const updateModule = async (req, res) => {
         Object.assign(module, updateData);
         await module.save();
 
+        // Invalidate all module caches
+        invalidateByPattern('modules');
+
         logger.info(`Module updated: ${module.name} by user ${req.user?.displayName || 'Anonymous'}`);
 
         res.json({
@@ -245,6 +300,9 @@ const deleteModule = async (req, res) => {
 
         await Module.findByIdAndDelete(id);
 
+        // Invalidate all module caches
+        invalidateByPattern('modules');
+
         logger.info(`Module deleted: ${module.name} by user ${req.user?.displayName || 'Anonymous'}`);
 
         res.json({
@@ -264,25 +322,37 @@ const deleteModule = async (req, res) => {
 // Get modules with lesson count
 const getModulesWithStats = async (req, res) => {
     try {
-        const modules = await Module.find({ isPublished: true })
-            .sort({ order: 1 })
-            .populate('prerequisites', 'name title')
-            .exec();
+        // Generate cache key
+        const cacheKey = generateKey('modules', 'stats');
+        
+        // Try to get from cache
+        const { data: modulesWithStats, fromCache } = await cacheWrapper(
+            cacheKey,
+            300, // 5 minutes TTL
+            async () => {
+                const modules = await Module.find({ isPublished: true })
+                    .sort({ order: 1 })
+                    .populate('prerequisites', 'name title')
+                    .exec();
 
-        // Get lesson counts for each module
-        const modulesWithStats = await Promise.all(
-            modules.map(async (module) => {
-                const lessonCount = await module.getLessonCount();
-                return {
-                    ...module.toObject(),
-                    lessonCount
-                };
-            })
+                // Get lesson counts for each module
+                return await Promise.all(
+                    modules.map(async (module) => {
+                        const lessonCount = await module.getLessonCount();
+                        return {
+                            ...module.toObject(),
+                            lessonCount
+                        };
+                    })
+                );
+            }
         );
 
+        res.set('X-Cache', fromCache ? 'HIT' : 'MISS');
         res.json({
             success: true,
-            data: modulesWithStats
+            data: modulesWithStats,
+            cached: fromCache
         });
     } catch (error) {
         logger.error('Error fetching modules with stats:', error);
