@@ -1,6 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const {
+    updatePhoto,
+    updateDisplayName,
+    updateBio,
+    requestEmailChange,
+    verifyEmailChange,
+    deleteAccount
+} = require('../controllers/userController');
+
+// Middleware to check authentication
+const requireAuth = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({ message: 'Not authenticated' });
+    }
+    next();
+};
 
 router.get('/current_user', (req, res) => {
     console.log('Current user request - Session:', req.sessionID);
@@ -61,5 +77,25 @@ router.get('/set_test_cookie', (req, res) => {
     res.cookie('test_cookie', '1', cookieOptions);
     res.json({ ok: true, message: 'Test cookie set', cookieOptions });
 });
+
+// ========= NEW USER MANAGEMENT ROUTES =========
+
+// Update user photo
+router.patch('/user/update-photo', requireAuth, updatePhoto);
+
+// Update display name
+router.patch('/user/update-display-name', requireAuth, updateDisplayName);
+
+// Update bio
+router.patch('/user/update-bio', requireAuth, updateBio);
+
+// Request email change (sends verification code)
+router.post('/user/request-email-change', requireAuth, requestEmailChange);
+
+// Verify email change code and update email
+router.post('/user/verify-email-change', requireAuth, verifyEmailChange);
+
+// Delete account
+router.delete('/user/delete-account', requireAuth, deleteAccount);
 
 module.exports = router;

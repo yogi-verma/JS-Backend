@@ -4,7 +4,8 @@ const userSchema = new mongoose.Schema({
     googleId: { type: String, required: true, unique: true },
     displayName: { type: String, required: true },
     email: { type: String, required: true },
-    photo: { type: String }
+    photo: { type: String },
+    bio: { type: String, default: null }
 }, { timestamps: true });
 
 const User = mongoose.model('User', userSchema);
