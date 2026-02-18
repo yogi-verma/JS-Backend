@@ -1,7 +1,6 @@
 const Lesson = require('../models/Lesson');
 const Module = require('../models/Module');
 const logger = require('../logger');
-const { generateKey, cacheWrapper, invalidateByPattern } = require('../cache');
 
 // Get all lessons for a module
 const getLessonsByModule = async (req, res) => {
@@ -18,35 +17,20 @@ const getLessonsByModule = async (req, res) => {
             });
         }
         
-        // Generate cache key
-        const cacheKey = generateKey('lessons', 'module', moduleId, published, page, limit);
+        const filter = { 
+            moduleId,
+            ...(published === 'true' && { isPublished: true })
+        };
         
-        // Try to get from cache
-        const { data: cachedResult, fromCache } = await cacheWrapper(
-            cacheKey,
-            300, // 5 minutes TTL
-            async () => {
-                const filter = { 
-                    moduleId,
-                    ...(published === 'true' && { isPublished: true })
-                };
-                
-                const lessons = await Lesson.find(filter)
-                    .sort({ order: 1 })
-                    .limit(limit * 1)
-                    .skip((page - 1) * limit)
-                    .populate('prerequisites', 'title order')
-                    .exec();
+        const lessons = await Lesson.find(filter)
+            .sort({ order: 1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit)
+            .populate('prerequisites', 'title order')
+            .exec();
 
-                const total = await Lesson.countDocuments(filter);
-                
-                return { lessons, total };
-            }
-        );
-        
-        const { lessons, total } = cachedResult;
+        const total = await Lesson.countDocuments(filter);
 
-        res.set('X-Cache', fromCache ? 'HIT' : 'MISS');
         res.json({
             success: true,
             data: lessons,
@@ -55,8 +39,7 @@ const getLessonsByModule = async (req, res) => {
                 limit: parseInt(limit),
                 total,
                 pages: Math.ceil(total / limit)
-            },
-            cached: fromCache
+            }
         });
     } catch (error) {
         logger.error('Error fetching lessons:', error);
@@ -73,20 +56,10 @@ const getLessonById = async (req, res) => {
     try {
         const { id } = req.params;
         
-        // Generate cache key
-        const cacheKey = generateKey('lessons', 'id', id);
-        
-        // Try to get from cache
-        const { data: lesson, fromCache } = await cacheWrapper(
-            cacheKey,
-            600, // 10 minutes TTL
-            async () => {
-                return await Lesson.findById(id)
-                    .populate('moduleId', 'name title')
-                    .populate('prerequisites', 'title order')
-                    .exec();
-            }
-        );
+        const lesson = await Lesson.findById(id)
+            .populate('moduleId', 'name title')
+            .populate('prerequisites', 'title order')
+            .exec();
 
         if (!lesson) {
             return res.status(404).json({
@@ -95,11 +68,9 @@ const getLessonById = async (req, res) => {
             });
         }
 
-        res.set('X-Cache', fromCache ? 'HIT' : 'MISS');
         res.json({
             success: true,
-            data: lesson,
-            cached: fromCache
+            data: lesson
         });
     } catch (error) {
         logger.error('Error fetching lesson:', error);
@@ -139,9 +110,6 @@ const createLesson = async (req, res) => {
 
         const lesson = new Lesson(lessonData);
         await lesson.save();
-
-        // Invalidate lesson caches
-        invalidateByPattern('lessons');
 
         logger.info(`New lesson created: ${lesson.title} in module ${module.name} by user ${req.user?.displayName || 'Anonymous'}`);
 
@@ -224,9 +192,6 @@ const updateLesson = async (req, res) => {
         Object.assign(lesson, updateData);
         await lesson.save();
 
-        // Invalidate lesson caches
-        invalidateByPattern('lessons');
-
         logger.info(`Lesson updated: ${lesson.title} by user ${req.user?.displayName || 'Anonymous'}`);
 
         res.json({
@@ -278,9 +243,6 @@ const deleteLesson = async (req, res) => {
 
         await Lesson.findByIdAndDelete(id);
 
-        // Invalidate lesson caches
-        invalidateByPattern('lessons');
-
         logger.info(`Lesson deleted: ${lesson.title} by user ${req.user?.displayName || 'Anonymous'}`);
 
         res.json({
@@ -311,47 +273,35 @@ const getLessonsWithStats = async (req, res) => {
             });
         }
 
-        // Generate cache key
-        const cacheKey = generateKey('lessons', 'stats', moduleId);
+        const lessons = await Lesson.find({ 
+            moduleId, 
+            isPublished: true 
+        })
+        .sort({ order: 1 })
+        .populate('prerequisites', 'title order')
+        .exec();
+
+        // Calculate stats
+        const totalDuration = lessons.reduce((sum, lesson) => sum + lesson.estimatedDuration, 0);
+        const lessonsByType = lessons.reduce((acc, lesson) => {
+            acc[lesson.type] = (acc[lesson.type] || 0) + 1;
+            return acc;
+        }, {});
         
-        // Try to get from cache
-        const { data: result, fromCache } = await cacheWrapper(
-            cacheKey,
-            300, // 5 minutes TTL
-            async () => {
-                const lessons = await Lesson.find({ 
-                    moduleId, 
-                    isPublished: true 
-                })
-                .sort({ order: 1 })
-                .populate('prerequisites', 'title order')
-                .exec();
-
-                // Calculate stats
-                const totalDuration = lessons.reduce((sum, lesson) => sum + lesson.estimatedDuration, 0);
-                const lessonsByType = lessons.reduce((acc, lesson) => {
-                    acc[lesson.type] = (acc[lesson.type] || 0) + 1;
-                    return acc;
-                }, {});
-                
-                return {
-                    lessons,
-                    stats: {
-                        totalLessons: lessons.length,
-                        totalDuration, // in minutes
-                        totalDurationHours: Math.round(totalDuration / 60 * 10) / 10,
-                        lessonsByType,
-                        averageDuration: lessons.length > 0 ? Math.round(totalDuration / lessons.length) : 0
-                    }
-                };
+        const result = {
+            lessons,
+            stats: {
+                totalLessons: lessons.length,
+                totalDuration, // in minutes
+                totalDurationHours: Math.round(totalDuration / 60 * 10) / 10,
+                lessonsByType,
+                averageDuration: lessons.length > 0 ? Math.round(totalDuration / lessons.length) : 0
             }
-        );
+        };
 
-        res.set('X-Cache', fromCache ? 'HIT' : 'MISS');
         res.json({
             success: true,
-            data: result,
-            cached: fromCache
+            data: result
         });
     } catch (error) {
         logger.error('Error fetching lessons with stats:', error);

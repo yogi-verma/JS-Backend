@@ -1,5 +1,4 @@
 const User = require('../models/User');
-const { generateKey, cacheWrapper } = require('../cache');
 const crypto = require('crypto');
 
 // Email service (for production, configure nodemailer)
@@ -37,39 +36,23 @@ const findOrCreateUser = async (profile) => {
     try {
         console.log('Finding or creating user with googleId:', profile.id);
         
-        // Generate cache key for this user
-        const cacheKey = generateKey('user', 'google', profile.id);
-        
-        // Try to get from cache
-        const { data: user, fromCache } = await cacheWrapper(
-            cacheKey,
-            1800, // 30 minutes TTL for user data
-            async () => {
-                const existingUser = await User.findOne({ googleId: profile.id });
-                if (existingUser) {
-                    console.log('User found in database:', existingUser._id);
-                    return existingUser;
-                }
-
-                // Create new user if not found
-                const newUser = new User({
-                    googleId: profile.id,
-                    displayName: profile.displayName || 'User',
-                    email: profile.emails && profile.emails[0] ? profile.emails[0].value : `${profile.id}@google.com`,
-                    photo: profile.photos && profile.photos[0] ? profile.photos[0].value : ''
-                });
-
-                await newUser.save();
-                console.log('New user created:', newUser._id);
-                return newUser;
-            }
-        );
-        
-        if (fromCache) {
-            console.log('User loaded from cache:', user._id);
+        const existingUser = await User.findOne({ googleId: profile.id });
+        if (existingUser) {
+            console.log('User found in database:', existingUser._id);
+            return existingUser;
         }
-        
-        return user;
+
+        // Create new user if not found
+        const newUser = new User({
+            googleId: profile.id,
+            displayName: profile.displayName || 'User',
+            email: profile.emails && profile.emails[0] ? profile.emails[0].value : `${profile.id}@google.com`,
+            photo: profile.photos && profile.photos[0] ? profile.photos[0].value : ''
+        });
+
+        await newUser.save();
+        console.log('New user created:', newUser._id);
+        return newUser;
     } catch (error) {
         console.error('Error in findOrCreateUser:', error);
         throw error;
@@ -164,27 +147,29 @@ const requestEmailChange = async (req, res) => {
         // Generate 6-digit verification code
         const verificationCode = crypto.randomInt(100000, 999999).toString();
 
-        // Store verification code in cache with 10 minutes TTL
-        const { getCache } = require('../cache');
-        const cache = getCache();
-        const cacheKey = `email_verification:${userId}`;
-        cache.set(cacheKey, {
+        // Store verification code in user's session/temp storage (no cache)
+        if (!req.session.emailVerification) {
+            req.session.emailVerification = {};
+        }
+        
+        req.session.emailVerification = {
             code: verificationCode,
             newEmail: newEmail,
-            attempts: 0
-        }, 600); // 10 minutes
+            attempts: 0,
+            expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+        };
 
-        // Send verification email
-        await sendVerificationEmail(newEmail, verificationCode);
-
-        console.log('Email verification code sent to:', newEmail);
+        console.log('Email verification code generated:', verificationCode, 'for', newEmail);
+        
+        // Return code to frontend so it can send via EmailJS
         res.json({ 
-            message: 'Verification code sent to new email',
+            message: 'Verification code generated',
+            code: verificationCode, // Frontend will send this via EmailJS
             email: newEmail 
         });
     } catch (error) {
         console.error('Error requesting email change:', error);
-        res.status(500).json({ message: 'Failed to send verification code' });
+        res.status(500).json({ message: 'Failed to generate verification code' });
     }
 };
 
@@ -198,11 +183,8 @@ const verifyEmailChange = async (req, res) => {
             return res.status(400).json({ message: 'Verification code is required' });
         }
 
-        // Get verification data from cache
-        const { getCache } = require('../cache');
-        const cache = getCache();
-        const cacheKey = `email_verification:${userId}`;
-        const verificationData = cache.get(cacheKey);
+        // Get verification data from session
+        const verificationData = req.session.emailVerification;
 
         if (!verificationData) {
             return res.status(400).json({ 
@@ -210,9 +192,17 @@ const verifyEmailChange = async (req, res) => {
             });
         }
 
+        // Check if expired
+        if (Date.now() > verificationData.expiresAt) {
+            delete req.session.emailVerification;
+            return res.status(400).json({ 
+                message: 'Verification code expired. Please request a new code.' 
+            });
+        }
+
         // Check attempts
         if (verificationData.attempts >= 5) {
-            cache.del(cacheKey);
+            delete req.session.emailVerification;
             return res.status(400).json({ 
                 message: 'Too many failed attempts. Please request a new code.' 
             });
@@ -221,7 +211,6 @@ const verifyEmailChange = async (req, res) => {
         // Verify code
         if (verificationData.code !== code.trim()) {
             verificationData.attempts += 1;
-            cache.set(cacheKey, verificationData, 600);
             return res.status(400).json({ 
                 message: 'Invalid verification code',
                 attemptsRemaining: 5 - verificationData.attempts
@@ -235,8 +224,8 @@ const verifyEmailChange = async (req, res) => {
             { new: true }
         );
 
-        // Clear verification data from cache
-        cache.del(cacheKey);
+        // Clear verification data from session
+        delete req.session.emailVerification;
 
         console.log('Email updated for user:', userId);
         res.json({ 

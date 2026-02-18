@@ -44,11 +44,12 @@ app.use(cors({
         return callback(new Error('CORS origin not allowed'));
     },
     credentials: true,
-    exposedHeaders: ['X-Cache', 'X-Response-Time'] // Expose custom headers to frontend
+    exposedHeaders: ['X-Response-Time'] // Expose custom headers to frontend
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase payload size limit for base64 image uploads
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.use(session({
     secret: process.env.SESSION_SECRET || 'mysecret',
