@@ -7,6 +7,11 @@ const {
     updateBio,
     requestEmailChange,
     verifyEmailChange,
+    updateStatus,
+    updateWebsite,
+    updateSocialLinks,
+    updateCompany,
+    updateTitle,
     deleteAccount
 } = require('../controllers/userController');
 
@@ -88,6 +93,21 @@ router.patch('/user/update-display-name', requireAuth, updateDisplayName);
 
 // Update bio
 router.patch('/user/update-bio', requireAuth, updateBio);
+
+// Update status
+router.patch('/user/update-status', requireAuth, updateStatus);
+
+// Update website
+router.patch('/user/update-website', requireAuth, updateWebsite);
+
+// Update social links
+router.patch('/user/update-social-links', requireAuth, updateSocialLinks);
+
+// Update company
+router.patch('/user/update-company', requireAuth, updateCompany);
+
+// Update title
+router.patch('/user/update-title', requireAuth, updateTitle);
 
 // Request email change (sends verification code)
 router.post('/user/request-email-change', requireAuth, requestEmailChange);
