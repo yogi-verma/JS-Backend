@@ -238,6 +238,121 @@ const verifyEmailChange = async (req, res) => {
     }
 };
 
+// Update user status
+const updateStatus = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { status } = req.body;
+
+        // Validate status value
+        const validStatuses = ['busy', 'focusing', 'building', 'optimistic', null];
+        if (status !== null && !validStatuses.includes(status)) {
+            return res.status(400).json({ 
+                message: 'Invalid status. Valid values are: busy, focusing, building, optimistic, or null' 
+            });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { status },
+            { new: true }
+        );
+
+        console.log('Status updated for user:', userId, 'to:', status);
+        res.json({ message: 'Status updated successfully', user });
+    } catch (error) {
+        console.error('Error updating status:', error);
+        res.status(500).json({ message: 'Failed to update status' });
+    }
+};
+
+// Update website
+const updateWebsite = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { website } = req.body;
+
+        // Website can be null or a string
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { website: website ? website.trim() : null },
+            { new: true }
+        );
+
+        console.log('Website updated for user:', userId);
+        res.json({ message: 'Website updated successfully', user });
+    } catch (error) {
+        console.error('Error updating website:', error);
+        res.status(500).json({ message: 'Failed to update website' });
+    }
+};
+
+// Update social links
+const updateSocialLinks = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { github, linkedin, twitter } = req.body;
+
+        const socialLinks = {
+            github: github ? github.trim() : null,
+            linkedin: linkedin ? linkedin.trim() : null,
+            twitter: twitter ? twitter.trim() : null
+        };
+
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { socialLinks },
+            { new: true }
+        );
+
+        console.log('Social links updated for user:', userId);
+        res.json({ message: 'Social links updated successfully', user });
+    } catch (error) {
+        console.error('Error updating social links:', error);
+        res.status(500).json({ message: 'Failed to update social links' });
+    }
+};
+
+// Update company
+const updateCompany = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { company } = req.body;
+
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { company: company ? company.trim() : null },
+            { new: true }
+        );
+
+        console.log('Company updated for user:', userId);
+        res.json({ message: 'Company updated successfully', user });
+    } catch (error) {
+        console.error('Error updating company:', error);
+        res.status(500).json({ message: 'Failed to update company' });
+    }
+};
+
+// Update title
+const updateTitle = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { title } = req.body;
+
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { title: title ? title.trim() : null },
+            { new: true }
+        );
+
+        console.log('Title updated for user:', userId);
+        res.json({ message: 'Title updated successfully', user });
+    } catch (error) {
+        console.error('Error updating title:', error);
+        res.status(500).json({ message: 'Failed to update title' });
+    }
+};
+
 // Delete user account
 const deleteAccount = async (req, res) => {
     try {
@@ -272,5 +387,10 @@ module.exports = {
     updateBio,
     requestEmailChange,
     verifyEmailChange,
+    updateStatus,
+    updateWebsite,
+    updateSocialLinks,
+    updateCompany,
+    updateTitle,
     deleteAccount
 };
