@@ -6,7 +6,7 @@ const logger = require('../logger');
 const getLessonsByModule = async (req, res) => {
     try {
         const { moduleId } = req.params;
-        const { published = 'true', page = 1, limit = 10 } = req.query;
+        const { page = 1, limit = 10 } = req.query;
         
         // Validate module exists
         const module = await Module.findById(moduleId);
@@ -17,16 +17,12 @@ const getLessonsByModule = async (req, res) => {
             });
         }
         
-        const filter = { 
-            moduleId,
-            ...(published === 'true' && { isPublished: true })
-        };
+        const filter = { moduleId };
         
         const lessons = await Lesson.find(filter)
             .sort({ order: 1 })
             .limit(limit * 1)
             .skip((page - 1) * limit)
-            .populate('prerequisites', 'title order')
             .exec();
 
         const total = await Lesson.countDocuments(filter);
@@ -58,7 +54,6 @@ const getLessonById = async (req, res) => {
         
         const lesson = await Lesson.findById(id)
             .populate('moduleId', 'name title')
-            .populate('prerequisites', 'title order')
             .exec();
 
         if (!lesson) {
@@ -111,7 +106,7 @@ const createLesson = async (req, res) => {
         const lesson = new Lesson(lessonData);
         await lesson.save();
 
-        logger.info(`New lesson created: ${lesson.title} in module ${module.name} by user ${req.user?.displayName || 'Anonymous'}`);
+        logger.info(`New lesson created: ${lesson.phase} in module ${module.name} by user ${req.user?.displayName || 'Anonymous'}`);
 
         res.status(201).json({
             success: true,
@@ -192,7 +187,7 @@ const updateLesson = async (req, res) => {
         Object.assign(lesson, updateData);
         await lesson.save();
 
-        logger.info(`Lesson updated: ${lesson.title} by user ${req.user?.displayName || 'Anonymous'}`);
+        logger.info(`Lesson updated: ${lesson.phase} by user ${req.user?.displayName || 'Anonymous'}`);
 
         res.json({
             success: true,
@@ -231,19 +226,9 @@ const deleteLesson = async (req, res) => {
             });
         }
 
-        // Check if this lesson is a prerequisite for other lessons
-        const dependentLessons = await Lesson.find({ prerequisites: id });
-        if (dependentLessons.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Cannot delete lesson that is a prerequisite for other lessons',
-                dependentLessons: dependentLessons.map(l => ({ id: l._id, title: l.title }))
-            });
-        }
-
         await Lesson.findByIdAndDelete(id);
 
-        logger.info(`Lesson deleted: ${lesson.title} by user ${req.user?.displayName || 'Anonymous'}`);
+        logger.info(`Lesson deleted: ${lesson.phase} by user ${req.user?.displayName || 'Anonymous'}`);
 
         res.json({
             success: true,
@@ -273,18 +258,14 @@ const getLessonsWithStats = async (req, res) => {
             });
         }
 
-        const lessons = await Lesson.find({ 
-            moduleId, 
-            isPublished: true 
-        })
+        const lessons = await Lesson.find({ moduleId })
         .sort({ order: 1 })
-        .populate('prerequisites', 'title order')
         .exec();
 
         // Calculate stats
         const totalDuration = lessons.reduce((sum, lesson) => sum + lesson.estimatedDuration, 0);
-        const lessonsByType = lessons.reduce((acc, lesson) => {
-            acc[lesson.type] = (acc[lesson.type] || 0) + 1;
+        const lessonsByDifficulty = lessons.reduce((acc, lesson) => {
+            acc[lesson.difficulty] = (acc[lesson.difficulty] || 0) + 1;
             return acc;
         }, {});
         
@@ -294,7 +275,7 @@ const getLessonsWithStats = async (req, res) => {
                 totalLessons: lessons.length,
                 totalDuration, // in minutes
                 totalDurationHours: Math.round(totalDuration / 60 * 10) / 10,
-                lessonsByType,
+                lessonsByDifficulty,
                 averageDuration: lessons.length > 0 ? Math.round(totalDuration / lessons.length) : 0
             }
         };

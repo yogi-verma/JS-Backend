@@ -6,28 +6,29 @@ const lessonSchema = new mongoose.Schema({
         ref: 'Module',
         required: true
     },
-    title: { 
-        type: String, 
-        required: true,
-        trim: true
-    },
-    description: { 
-        type: String, 
-        required: true,
-        trim: true
-    },
-    content: { 
-        type: String, 
+    phase: {
+        type: String,
+        trim: true,
         required: true
+    },
+    concepts: [{
+        name: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        content: {
+            type: String,
+            required: true
+        }
+    }],
+    content: { 
+        type: String
     },
     order: { 
         type: Number, 
         required: true,
         min: 0
-    },
-    isPublished: { 
-        type: Boolean, 
-        default: false
     },
     estimatedDuration: {
         type: Number, // in minutes
@@ -39,15 +40,6 @@ const lessonSchema = new mongoose.Schema({
         enum: ['beginner', 'intermediate', 'advanced'],
         default: 'beginner'
     },
-    type: {
-        type: String,
-        enum: ['theory', 'practice', 'quiz', 'project'],
-        default: 'theory'
-    },
-    prerequisites: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Lesson'
-    }],
     tags: [{
         type: String,
         trim: true
@@ -113,9 +105,8 @@ lessonSchema.virtual('isCompleted', {
 
 // Indexes for better query performance
 lessonSchema.index({ moduleId: 1, order: 1 });
-lessonSchema.index({ moduleId: 1, isPublished: 1 });
 lessonSchema.index({ order: 1 });
-lessonSchema.index({ type: 1 });
+lessonSchema.index({ phase: 1 });
 
 // Pre-save middleware to validate order uniqueness within a module
 lessonSchema.pre('save', async function(next) {
@@ -136,12 +127,6 @@ lessonSchema.pre('save', async function(next) {
 // Pre-remove middleware to handle dependencies
 lessonSchema.pre('deleteOne', { document: true, query: false }, async function(next) {
     try {
-        // Remove this lesson from prerequisites of other lessons
-        await this.constructor.updateMany(
-            { prerequisites: this._id },
-            { $pull: { prerequisites: this._id } }
-        );
-        
         // Remove user progress for this lesson
         const UserProgress = mongoose.model('UserProgress');
         await UserProgress.deleteMany({ lessonId: this._id });
