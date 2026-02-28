@@ -11,6 +11,8 @@ require('dotenv').config();
 const userRoutes = require('./routes/userRoutes');
 const moduleRoutes = require('./routes/moduleRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
+const interviewQuestionRoutes = require('./routes/interviewQuestionRoutes');
+const interviewProgressRoutes = require('./routes/interviewProgressRoutes');
 const User = require('./models/User');
 
 const app = express();
@@ -150,6 +152,12 @@ app.use('/api/modules', moduleRoutes);
 
 // Lesson Routes
 app.use('/api/lessons', lessonRoutes);
+
+// Interview Question Routes
+app.use('/api/interview-questions', interviewQuestionRoutes);
+
+// Interview Progress Routes
+app.use('/api/interview-progress', interviewProgressRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
