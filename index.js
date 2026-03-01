@@ -13,6 +13,8 @@ const moduleRoutes = require('./routes/moduleRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
 const interviewQuestionRoutes = require('./routes/interviewQuestionRoutes');
 const interviewProgressRoutes = require('./routes/interviewProgressRoutes');
+const frontendQuestionRoutes = require('./routes/frontendQuestionRoutes');
+const frontendProgressRoutes = require('./routes/frontendProgressRoutes');
 const User = require('./models/User');
 
 const app = express();
@@ -158,6 +160,12 @@ app.use('/api/interview-questions', interviewQuestionRoutes);
 
 // Interview Progress Routes
 app.use('/api/interview-progress', interviewProgressRoutes);
+
+// Frontend Question Routes
+app.use('/api/frontend-questions', frontendQuestionRoutes);
+
+// Frontend Progress Routes
+app.use('/api/frontend-progress', frontendProgressRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
