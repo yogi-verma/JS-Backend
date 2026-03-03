@@ -17,6 +17,7 @@ const frontendQuestionRoutes = require('./routes/frontendQuestionRoutes');
 const frontendProgressRoutes = require('./routes/frontendProgressRoutes');
 const codingQuestionRoutes = require('./routes/codingQuestionRoutes');
 const codingProgressRoutes = require('./routes/codingProgressRoutes');
+const streakRoutes = require('./routes/streakRoutes');
 const User = require('./models/User');
 
 const app = express();
@@ -174,6 +175,9 @@ app.use('/api/coding-questions', codingQuestionRoutes);
 
 // Coding Progress Routes
 app.use('/api/coding-progress', codingProgressRoutes);
+
+// Streak Routes
+app.use('/api/streak', streakRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
