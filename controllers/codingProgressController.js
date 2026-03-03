@@ -1,6 +1,7 @@
 const UserCodingProgress = require('../models/UserCodingProgress');
 const CodingQuestion = require('../models/CodingQuestion');
 const { executeCode, validateCode } = require('../utils/codeExecutor');
+const { recordActivity } = require('./streakController');
 const logger = require('../logger');
 
 /**
@@ -152,6 +153,25 @@ const submitSolution = async (req, res) => {
 
         logger.info(`User ${userId} submitted solution for question ${questionId} — ${executionResult.allPassed ? 'ACCEPTED' : 'FAILED'} (${executionResult.passedTests}/${executionResult.totalTests})`);
 
+        // Record streak activity when all test cases pass
+        let streakData = null;
+        if (executionResult.allPassed) {
+            try {
+                const result = await recordActivity(userId);
+                if (result) {
+                    streakData = {
+                        currentStreak: result.streak.currentStreak,
+                        longestStreak: result.streak.longestStreak,
+                        isFirstOfDay: result.isFirstOfDay,
+                        todaySolveCount: result.streak.activeDays.find(d => d.date === new Date().toISOString().split('T')[0])?.count || 1
+                    };
+                }
+            } catch (streakErr) {
+                // Don't fail the submission if streak recording fails
+                logger.error('Streak recording failed (non-blocking):', streakErr);
+            }
+        }
+
         // For hidden test cases: show full details when failed so user can debug
         const safeResults = executionResult.results.map((r, idx) => {
             const testCase = question.testCases[idx];
@@ -192,7 +212,8 @@ const submitSolution = async (req, res) => {
                 passedTests: executionResult.passedTests,
                 totalExecutionTime: executionResult.totalExecutionTime,
                 attempts: progress.attempts,
-                isSolved: progress.isSolved
+                isSolved: progress.isSolved,
+                streak: streakData
             }
         });
     } catch (error) {
