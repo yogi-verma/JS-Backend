@@ -281,6 +281,112 @@ const submitDailyQuiz = async (req, res) => {
 };
 
 /**
+ * GET /api/daily-quiz/date/:date
+ * Returns the quiz attempt for a specific date (YYYY-MM-DD).
+ * If the user attempted the quiz on that date, returns full results with
+ * questions, selected answers, correct answers, and explanations.
+ * If not attempted, returns { attempted: false }.
+ */
+const getQuizByDate = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { date } = req.params;
+
+        // Validate date format YYYY-MM-DD
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid date format. Use YYYY-MM-DD.'
+            });
+        }
+
+        const record = await UserDailyQuiz.findOne({ userId, quizDate: date }).populate('questionIds');
+
+        if (!record) {
+            return res.json({
+                success: true,
+                data: {
+                    attempted: false,
+                    quizDate: date
+                }
+            });
+        }
+
+        if (!record.completed) {
+            // Quiz was started but not submitted
+            return res.json({
+                success: true,
+                data: {
+                    attempted: false,
+                    started: true,
+                    quizDate: date
+                }
+            });
+        }
+
+        const results = buildResults(record);
+
+        return res.json({
+            success: true,
+            data: {
+                attempted: true,
+                quizDate: date,
+                score: record.score,
+                totalQuestions: record.totalQuestions,
+                completedAt: record.completedAt,
+                results
+            }
+        });
+    } catch (error) {
+        logger.error('getQuizByDate error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
+ * GET /api/daily-quiz/calendar
+ * Returns a map of all dates on which the user attempted the quiz,
+ * along with the score for each date.
+ * Optional query params: year (e.g. 2026), month (1-12).
+ * Response: { success, data: { "YYYY-MM-DD": { score, totalQuestions, completedAt } } }
+ */
+const getQuizCalendar = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const { year, month } = req.query;
+
+        const filter = { userId, completed: true };
+
+        // Narrow by year / month if provided
+        if (year && month) {
+            const paddedMonth = String(month).padStart(2, '0');
+            // quizDate starts with "YYYY-MM"
+            filter.quizDate = { $regex: `^${year}-${paddedMonth}` };
+        } else if (year) {
+            filter.quizDate = { $regex: `^${year}-` };
+        }
+
+        const records = await UserDailyQuiz.find(filter)
+            .select('quizDate score totalQuestions completedAt')
+            .lean();
+
+        const calendar = {};
+        for (const r of records) {
+            calendar[r.quizDate] = {
+                score: r.score,
+                totalQuestions: r.totalQuestions,
+                completedAt: r.completedAt
+            };
+        }
+
+        return res.json({ success: true, data: calendar });
+    } catch (error) {
+        logger.error('getQuizCalendar error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+};
+
+/**
  * GET /api/daily-quiz/history
  * Returns the user's last 30 daily quiz attempts.
  */
@@ -349,5 +455,7 @@ module.exports = {
     getDailyQuizStatus,
     getDailyQuiz,
     submitDailyQuiz,
-    getQuizHistory
+    getQuizHistory,
+    getQuizByDate,
+    getQuizCalendar
 };
