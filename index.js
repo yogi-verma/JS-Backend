@@ -18,6 +18,7 @@ const frontendProgressRoutes = require('./routes/frontendProgressRoutes');
 const codingQuestionRoutes = require('./routes/codingQuestionRoutes');
 const codingProgressRoutes = require('./routes/codingProgressRoutes');
 const streakRoutes = require('./routes/streakRoutes');
+const dailyQuizRoutes = require('./routes/dailyQuizRoutes');
 const User = require('./models/User');
 
 const app = express();
@@ -178,6 +179,9 @@ app.use('/api/coding-progress', codingProgressRoutes);
 
 // Streak Routes
 app.use('/api/streak', streakRoutes);
+
+// Daily Quiz Routes
+app.use('/api/daily-quiz', dailyQuizRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
