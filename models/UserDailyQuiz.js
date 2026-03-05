@@ -64,4 +64,19 @@ userDailyQuizSchema.index({ userId: 1, quizDate: 1 }, { unique: true });
 
 const UserDailyQuiz = mongoose.model('UserDailyQuiz', userDailyQuizSchema);
 
+// Drop stale indexes from previous schema versions (e.g. attemptDate)
+UserDailyQuiz.collection.getIndexes()
+    .then(indexes => {
+        const staleIndexes = Object.keys(indexes).filter(
+            name => name.includes('attemptDate')
+        );
+        return Promise.all(
+            staleIndexes.map(name => {
+                console.log(`[INFO] Dropping stale index "${name}" from userdailyquizzes`);
+                return UserDailyQuiz.collection.dropIndex(name);
+            })
+        );
+    })
+    .catch(() => { /* collection may not exist yet – safe to ignore */ });
+
 module.exports = UserDailyQuiz;
