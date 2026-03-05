@@ -20,11 +20,11 @@ const testCaseSchema = new mongoose.Schema({
 
 const exampleSchema = new mongoose.Schema({
     input: {
-        type: String,
+        type: mongoose.Schema.Types.Mixed,
         required: true
     },
     output: {
-        type: String,
+        type: mongoose.Schema.Types.Mixed,
         required: true
     },
     explanation: {
