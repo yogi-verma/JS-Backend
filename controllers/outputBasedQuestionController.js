@@ -4,7 +4,7 @@ const logger = require('../logger');
 // Get all output-based questions (with optional filters)
 const getOutputBasedQuestions = async (req, res) => {
     try {
-        const { category, difficulty, page = 1, limit = 50 } = req.query;
+        const { category, difficulty, page = 1, limit = 200 } = req.query;
 
         const filter = { isActive: true };
         if (category) filter.category = category;
@@ -69,7 +69,7 @@ const getOutputBasedQuestionById = async (req, res) => {
 const getOutputBasedQuestionsByCategory = async (req, res) => {
     try {
         const { category } = req.params;
-        const { difficulty, page = 1, limit = 50 } = req.query;
+        const { difficulty, page = 1, limit = 200 } = req.query;
 
         const validCategories = OutputBasedQuestion.schema.path('category').enumValues;
         if (!validCategories.includes(category)) {
