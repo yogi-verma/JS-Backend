@@ -110,7 +110,7 @@ const codingQuestionsData = [
             { input: ['banana'], expectedOutput: 'aaabnn', description: 'Repeated characters banana', isHidden: true },
             { input: ['zzz'], expectedOutput: 'zzz', description: 'All same characters', isHidden: true },
             { input: ['dcba'], expectedOutput: 'abcd', description: 'Four chars reverse order', isHidden: true },
-            { input: ['programming'], expectedOutput: 'aggimmnoprrr', description: 'Word with repeated letters', isHidden: true },
+            { input: ['programming'], expectedOutput: 'aggimmnoprr', description: 'Word with repeated letters', isHidden: true },
             { input: [''], expectedOutput: '', description: 'Empty string', isHidden: true },
             { input: ['zyxwvutsrqponmlkjihgfedcba'], expectedOutput: 'abcdefghijklmnopqrstuvwxyz', description: 'Full reverse alphabet', isHidden: true },
             { input: ['abcdefghijklmnopqrstuvwxyz'], expectedOutput: 'abcdefghijklmnopqrstuvwxyz', description: 'Full sorted alphabet', isHidden: true },

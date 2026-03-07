@@ -155,6 +155,7 @@ const submitSolution = async (req, res) => {
 
         // Record streak activity when all test cases pass
         let streakData = null;
+        let newBadges = [];
         if (executionResult.allPassed) {
             try {
                 const result = await recordActivity(userId);
@@ -165,6 +166,7 @@ const submitSolution = async (req, res) => {
                         isFirstOfDay: result.isFirstOfDay,
                         todaySolveCount: result.streak.activeDays.find(d => d.date === new Date().toISOString().split('T')[0])?.count || 1
                     };
+                    newBadges = result.newBadges || [];
                 }
             } catch (streakErr) {
                 // Don't fail the submission if streak recording fails
@@ -213,7 +215,8 @@ const submitSolution = async (req, res) => {
                 totalExecutionTime: executionResult.totalExecutionTime,
                 attempts: progress.attempts,
                 isSolved: progress.isSolved,
-                streak: streakData
+                streak: streakData,
+                newBadges: newBadges
             }
         });
     } catch (error) {

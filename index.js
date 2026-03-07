@@ -18,6 +18,7 @@ const frontendProgressRoutes = require('./routes/frontendProgressRoutes');
 const codingQuestionRoutes = require('./routes/codingQuestionRoutes');
 const codingProgressRoutes = require('./routes/codingProgressRoutes');
 const streakRoutes = require('./routes/streakRoutes');
+const badgeRoutes = require('./routes/badgeRoutes');
 const dailyQuizRoutes = require('./routes/dailyQuizRoutes');
 const outputBasedQuestionRoutes = require('./routes/outputBasedQuestionRoutes');
 const User = require('./models/User');
@@ -180,6 +181,9 @@ app.use('/api/coding-progress', codingProgressRoutes);
 
 // Streak Routes
 app.use('/api/streak', streakRoutes);
+
+// Badge Routes
+app.use('/api/badges', badgeRoutes);
 
 // Daily Quiz Routes
 app.use('/api/daily-quiz', dailyQuizRoutes);
