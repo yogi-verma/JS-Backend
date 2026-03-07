@@ -5,9 +5,9 @@ const logger = require('../logger');
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /**
- * Returns today's date string in YYYY-MM-DD format (UTC).
+ * Returns today's date string in YYYY-MM-DD format (IST — Asia/Kolkata).
  */
-const getTodayString = () => new Date().toISOString().split('T')[0];
+const getTodayString = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
 /**
  * Pick `count` random items from an array (Fisher-Yates partial shuffle).

@@ -1,22 +1,32 @@
 const UserStreak = require('../models/UserStreak');
 const logger = require('../logger');
+const { checkAndAwardBadges } = require('./badgeController');
 
 // ──────────────────────────────────────────────
-//  Helper: get today's date as 'YYYY-MM-DD' in UTC
+//  Helper: get today's date as 'YYYY-MM-DD' in IST (Asia/Kolkata)
 // ──────────────────────────────────────────────
-const getTodayUTC = () => {
-    const now = new Date();
-    return now.toISOString().split('T')[0]; // '2026-03-03'
+const IST_TIMEZONE = 'Asia/Kolkata';
+
+const getTodayIST = () => {
+    return new Date().toLocaleDateString('en-CA', { timeZone: IST_TIMEZONE }); // 'YYYY-MM-DD'
 };
 
 // ──────────────────────────────────────────────
-//  Helper: get yesterday's date as 'YYYY-MM-DD' in UTC
+//  Helper: get yesterday's date as 'YYYY-MM-DD' in IST
 // ──────────────────────────────────────────────
-const getYesterdayUTC = () => {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() - 1);
-    return d.toISOString().split('T')[0];
+const getYesterdayIST = () => {
+    // Get current IST date parts, then subtract one day
+    const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: IST_TIMEZONE }));
+    nowIST.setDate(nowIST.getDate() - 1);
+    const y = nowIST.getFullYear();
+    const m = String(nowIST.getMonth() + 1).padStart(2, '0');
+    const d = String(nowIST.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
 };
+
+// Keep old names as aliases so nothing breaks
+const getTodayUTC = getTodayIST;
+const getYesterdayUTC = getYesterdayIST;
 
 // ══════════════════════════════════════════════
 //  RECORD ACTIVITY  (called internally after a
@@ -39,7 +49,10 @@ const recordActivity = async (userId) => {
                 totalActiveDays: 1
             });
             logger.info(`Streak created for user ${userId} — Day 1`);
-            return { streak, isFirstOfDay: true };
+
+            // Check for badges (in case user already had progress from migration)
+            const newBadges = await checkAndAwardBadges(userId, 1);
+            return { streak, isFirstOfDay: true, newBadges };
         }
 
         // Already active today — just bump the solve count
@@ -50,7 +63,7 @@ const recordActivity = async (userId) => {
             }
             await streak.save();
             logger.debug(`User ${userId} solved another problem today (count: ${dayEntry?.count})`);
-            return { streak, isFirstOfDay: false };
+            return { streak, isFirstOfDay: false, newBadges: [] };
         }
 
         // --- New active day ---
@@ -75,7 +88,10 @@ const recordActivity = async (userId) => {
 
         await streak.save();
         logger.info(`User ${userId} streak updated — current: ${streak.currentStreak}, longest: ${streak.longestStreak}`);
-        return { streak, isFirstOfDay: true };
+
+        // Check & award badges based on the new streak value
+        const newBadges = await checkAndAwardBadges(userId, streak.currentStreak);
+        return { streak, isFirstOfDay: true, newBadges };
     } catch (error) {
         logger.error('Error recording streak activity:', error);
         throw error;
@@ -214,13 +230,16 @@ const getActivityHistory = async (req, res) => {
             });
         }
 
-        const today = getTodayUTC();
-        const yesterday = getYesterdayUTC();
+        const today = getTodayIST();
+        const yesterday = getYesterdayIST();
 
-        // Calculate date N days ago
-        const startDate = new Date();
-        startDate.setUTCDate(startDate.getUTCDate() - parseInt(days));
-        const startStr = startDate.toISOString().split('T')[0];
+        // Calculate date N days ago in IST
+        const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: IST_TIMEZONE }));
+        nowIST.setDate(nowIST.getDate() - parseInt(days));
+        const sy = nowIST.getFullYear();
+        const sm = String(nowIST.getMonth() + 1).padStart(2, '0');
+        const sd = String(nowIST.getDate()).padStart(2, '0');
+        const startStr = `${sy}-${sm}-${sd}`;
 
         // Filter active days within the range
         const filteredDays = streak.activeDays.filter(d => d.date >= startStr && d.date <= today);
