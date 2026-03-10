@@ -1,11 +1,24 @@
 const FrontendQuestion = require('../models/FrontendQuestion');
 const logger = require('../logger');
+const redis = require('../redisClient');
+
+const FRONTEND_TTL = 3600; // 1 hour — questions rarely change
 
 // Get all frontend questions (with optional filters)
 const getFrontendQuestions = async (req, res) => {
     try {
         const { category, page = 1, limit = 50 } = req.query;
+        const cacheKey = `frontend:all:cat=${category||'*'}:page=${page}:limit=${limit}`;
 
+        // 1. Try Redis cache
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            logger.debug(`Cache HIT: ${cacheKey}`);
+            return res.json(JSON.parse(cached));
+        }
+        logger.debug(`Cache MISS: ${cacheKey}`);
+
+        // 2. Fetch from MongoDB
         const filter = {};
         if (category) filter.category = category;
 
@@ -17,7 +30,7 @@ const getFrontendQuestions = async (req, res) => {
 
         const total = await FrontendQuestion.countDocuments(filter);
 
-        res.json({
+        const response = {
             success: true,
             data: questions,
             pagination: {
@@ -26,7 +39,12 @@ const getFrontendQuestions = async (req, res) => {
                 total,
                 pages: Math.ceil(total / limit)
             }
-        });
+        };
+
+        // 3. Store in Redis
+        await redis.set(cacheKey, JSON.stringify(response), FRONTEND_TTL);
+
+        res.json(response);
     } catch (error) {
         logger.error('Error fetching frontend questions:', error);
         res.status(500).json({
@@ -41,6 +59,14 @@ const getFrontendQuestions = async (req, res) => {
 const getFrontendQuestionById = async (req, res) => {
     try {
         const { id } = req.params;
+        const cacheKey = `frontend:id=${id}`;
+
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            logger.debug(`Cache HIT: ${cacheKey}`);
+            return res.json(JSON.parse(cached));
+        }
+        logger.debug(`Cache MISS: ${cacheKey}`);
 
         const question = await FrontendQuestion.findById(id);
         if (!question) {
@@ -50,10 +76,10 @@ const getFrontendQuestionById = async (req, res) => {
             });
         }
 
-        res.json({
-            success: true,
-            data: question
-        });
+        const response = { success: true, data: question };
+        await redis.set(cacheKey, JSON.stringify(response), FRONTEND_TTL);
+
+        res.json(response);
     } catch (error) {
         logger.error('Error fetching frontend question:', error);
         res.status(500).json({
@@ -80,16 +106,29 @@ const getFrontendQuestionsByCategory = async (req, res) => {
             });
         }
 
+        const cacheKey = `frontend:bycat=${decodedCategory}`;
+
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            logger.debug(`Cache HIT: ${cacheKey}`);
+            return res.json(JSON.parse(cached));
+        }
+        logger.debug(`Cache MISS: ${cacheKey}`);
+
         const questions = await FrontendQuestion.find({ category: decodedCategory })
             .sort({ order: 1 })
             .exec();
 
-        res.json({
+        const response = {
             success: true,
             data: questions,
             total: questions.length,
             category: decodedCategory
-        });
+        };
+
+        await redis.set(cacheKey, JSON.stringify(response), FRONTEND_TTL);
+
+        res.json(response);
     } catch (error) {
         logger.error('Error fetching questions by category:', error);
         res.status(500).json({
@@ -103,6 +142,15 @@ const getFrontendQuestionsByCategory = async (req, res) => {
 // Get frontend questions stats
 const getFrontendQuestionsStats = async (req, res) => {
     try {
+        const cacheKey = 'frontend:stats';
+
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            logger.debug(`Cache HIT: ${cacheKey}`);
+            return res.json(JSON.parse(cached));
+        }
+        logger.debug(`Cache MISS: ${cacheKey}`);
+
         const total = await FrontendQuestion.countDocuments();
 
         const byCategory = await FrontendQuestion.aggregate([
@@ -112,7 +160,7 @@ const getFrontendQuestionsStats = async (req, res) => {
 
         const validCategories = FrontendQuestion.schema.path('category').enumValues;
 
-        res.json({
+        const response = {
             success: true,
             data: {
                 total,
@@ -124,7 +172,11 @@ const getFrontendQuestionsStats = async (req, res) => {
                 })),
                 allCategories: validCategories
             }
-        });
+        };
+
+        await redis.set(cacheKey, JSON.stringify(response), FRONTEND_TTL);
+
+        res.json(response);
     } catch (error) {
         logger.error('Error fetching frontend questions stats:', error);
         res.status(500).json({
@@ -138,18 +190,31 @@ const getFrontendQuestionsStats = async (req, res) => {
 // Get list of all categories (with counts)
 const getCategories = async (req, res) => {
     try {
+        const cacheKey = 'frontend:categories';
+
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            logger.debug(`Cache HIT: ${cacheKey}`);
+            return res.json(JSON.parse(cached));
+        }
+        logger.debug(`Cache MISS: ${cacheKey}`);
+
         const categories = await FrontendQuestion.aggregate([
             { $group: { _id: '$category', count: { $sum: 1 } } },
             { $sort: { _id: 1 } }
         ]);
 
-        res.json({
+        const response = {
             success: true,
             data: categories.map(item => ({
                 category: item._id,
                 count: item.count
             }))
-        });
+        };
+
+        await redis.set(cacheKey, JSON.stringify(response), FRONTEND_TTL);
+
+        res.json(response);
     } catch (error) {
         logger.error('Error fetching categories:', error);
         res.status(500).json({
