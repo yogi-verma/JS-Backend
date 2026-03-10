@@ -1,11 +1,24 @@
 const InterviewQuestion = require('../models/InterviewQuestion');
 const logger = require('../logger');
+const redis = require('../redisClient');
+
+const INTERVIEW_TTL = 3600; // 1 hour — questions rarely change
 
 // Get all interview questions (with optional filters)
 const getInterviewQuestions = async (req, res) => {
     try {
         const { difficulty, category, page = 1, limit = 30 } = req.query;
+        const cacheKey = `interview:all:diff=${difficulty||'*'}:cat=${category||'*'}:page=${page}:limit=${limit}`;
 
+        // 1. Try Redis cache
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            logger.debug(`Cache HIT: ${cacheKey}`);
+            return res.json(JSON.parse(cached));
+        }
+        logger.debug(`Cache MISS: ${cacheKey}`);
+
+        // 2. Fetch from MongoDB
         const filter = {};
         if (difficulty) filter.difficulty = difficulty;
         if (category) filter.category = category;
@@ -18,7 +31,7 @@ const getInterviewQuestions = async (req, res) => {
 
         const total = await InterviewQuestion.countDocuments(filter);
 
-        res.json({
+        const response = {
             success: true,
             data: questions,
             pagination: {
@@ -27,7 +40,12 @@ const getInterviewQuestions = async (req, res) => {
                 total,
                 pages: Math.ceil(total / limit)
             }
-        });
+        };
+
+        // 3. Store in Redis
+        await redis.set(cacheKey, JSON.stringify(response), INTERVIEW_TTL);
+
+        res.json(response);
     } catch (error) {
         logger.error('Error fetching interview questions:', error);
         res.status(500).json({
@@ -42,6 +60,14 @@ const getInterviewQuestions = async (req, res) => {
 const getInterviewQuestionById = async (req, res) => {
     try {
         const { id } = req.params;
+        const cacheKey = `interview:id=${id}`;
+
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            logger.debug(`Cache HIT: ${cacheKey}`);
+            return res.json(JSON.parse(cached));
+        }
+        logger.debug(`Cache MISS: ${cacheKey}`);
 
         const question = await InterviewQuestion.findById(id);
         if (!question) {
@@ -51,10 +77,10 @@ const getInterviewQuestionById = async (req, res) => {
             });
         }
 
-        res.json({
-            success: true,
-            data: question
-        });
+        const response = { success: true, data: question };
+        await redis.set(cacheKey, JSON.stringify(response), INTERVIEW_TTL);
+
+        res.json(response);
     } catch (error) {
         logger.error('Error fetching interview question:', error);
         res.status(500).json({
@@ -77,15 +103,23 @@ const getInterviewQuestionsByDifficulty = async (req, res) => {
             });
         }
 
+        const cacheKey = `interview:bydiff=${difficulty}`;
+
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            logger.debug(`Cache HIT: ${cacheKey}`);
+            return res.json(JSON.parse(cached));
+        }
+        logger.debug(`Cache MISS: ${cacheKey}`);
+
         const questions = await InterviewQuestion.find({ difficulty })
             .sort({ order: 1 })
             .exec();
 
-        res.json({
-            success: true,
-            data: questions,
-            total: questions.length
-        });
+        const response = { success: true, data: questions, total: questions.length };
+        await redis.set(cacheKey, JSON.stringify(response), INTERVIEW_TTL);
+
+        res.json(response);
     } catch (error) {
         logger.error('Error fetching questions by difficulty:', error);
         res.status(500).json({
@@ -99,6 +133,15 @@ const getInterviewQuestionsByDifficulty = async (req, res) => {
 // Get interview questions stats
 const getInterviewQuestionsStats = async (req, res) => {
     try {
+        const cacheKey = 'interview:stats';
+
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            logger.debug(`Cache HIT: ${cacheKey}`);
+            return res.json(JSON.parse(cached));
+        }
+        logger.debug(`Cache MISS: ${cacheKey}`);
+
         const total = await InterviewQuestion.countDocuments();
         const byDifficulty = await InterviewQuestion.aggregate([
             { $group: { _id: '$difficulty', count: { $sum: 1 } } }
@@ -108,7 +151,7 @@ const getInterviewQuestionsStats = async (req, res) => {
             { $sort: { count: -1 } }
         ]);
 
-        res.json({
+        const response = {
             success: true,
             data: {
                 total,
@@ -121,7 +164,11 @@ const getInterviewQuestionsStats = async (req, res) => {
                     count: item.count
                 }))
             }
-        });
+        };
+
+        await redis.set(cacheKey, JSON.stringify(response), INTERVIEW_TTL);
+
+        res.json(response);
     } catch (error) {
         logger.error('Error fetching interview questions stats:', error);
         res.status(500).json({

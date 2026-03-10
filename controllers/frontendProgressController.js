@@ -1,6 +1,11 @@
 const UserFrontendProgress = require('../models/UserFrontendProgress');
 const FrontendQuestion = require('../models/FrontendQuestion');
 const logger = require('../logger');
+const redis = require('../redisClient');
+
+const PROGRESS_TTL = 3600; // 1 hour — explicitly invalidated on every toggle
+
+const progressCacheKey = (userId) => `frontend:progress:user=${userId}`;
 
 // Toggle completion status for a frontend question
 const toggleFrontendQuestionCompletion = async (req, res) => {
@@ -37,6 +42,10 @@ const toggleFrontendQuestionCompletion = async (req, res) => {
 
         logger.info(`User ${userId} toggled frontend question ${questionId} to ${progress.isCompleted}`);
 
+        // Invalidate this user's progress cache so next fetch is fresh from DB
+        await redis.del(progressCacheKey(userId));
+        logger.debug(`Cache invalidated: ${progressCacheKey(userId)}`);
+
         res.json({
             success: true,
             data: {
@@ -59,7 +68,17 @@ const toggleFrontendQuestionCompletion = async (req, res) => {
 const getUserFrontendProgress = async (req, res) => {
     try {
         const userId = req.user._id;
+        const cacheKey = progressCacheKey(userId);
 
+        // 1. Try Redis cache
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            logger.debug(`Cache HIT: ${cacheKey}`);
+            return res.json(JSON.parse(cached));
+        }
+        logger.debug(`Cache MISS: ${cacheKey}`);
+
+        // 2. Fetch from MongoDB
         const progress = await UserFrontendProgress.find({
             userId,
             isCompleted: true
@@ -74,11 +93,16 @@ const getUserFrontendProgress = async (req, res) => {
             };
         });
 
-        res.json({
+        const response = {
             success: true,
             data: progressMap,
             completedCount: progress.length
-        });
+        };
+
+        // 3. Store in Redis
+        await redis.set(cacheKey, JSON.stringify(response), PROGRESS_TTL);
+
+        res.json(response);
     } catch (error) {
         logger.error('Error fetching user frontend progress:', error);
         res.status(500).json({
